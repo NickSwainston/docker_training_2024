@@ -17,8 +17,6 @@ keypoints:
 - Building docker containers uses similar commands to installing software on your computer
 ---
 
-Some of the content for this lesson is derived from the [Coding Best Practices](https://adacs-australia.github.io/2023-03-20-Coding-Best-Practices-Workshop/) workshop that was run by ADACS.
-Additional information and background can be found in the intro lessons of that workshop.
 
 ## Goal
 There are two main goals that we hope to achieve by using containers:
@@ -234,23 +232,20 @@ A few things to note:
 - Whatever files you put into the container during the build process will remain there during deployment.
 
 Docker containers are built according to instructions in a `Dockerfile`.
-Below is an example docker file which is used to build a container for a project called [Robbie](https://github.com/PaulHancock/Robbie):
+Below is an example docker file which is used to build a container for a project called [psrdb](https://github.com/OZGrav/psrdb):
 ~~~
 # Start with a container that already has Python v3.9 installed
 FROM python:3.9
 
 # Set some meta-data about this container
-LABEL maintainer="Paul Hancock <paul.hancock@curtin.edu.au>"
+LABEL maintainer="Nick Swainston <nickaswainston@gmail.com>"
 
-# install non-python dependencies
+# install non-python dependencies (bc is a math library that isn't needed but a good example of how to install other libraries)
 RUN apt update && \
-    apt install -y openjdk-11-jdk swarp && \
-    apt-get autoremove -y && \ # autoremove and clean will get rid of not-needed libraries and reduce the container size (a bit)
-    apt-get clean
-
-# download a java library and make a wrapper script for it
-RUN cd /usr/local/lib && wget http://www.star.bris.ac.uk/~mbt/stilts/stilts.jar && \
-    cd /usr/local/bin && echo 'java -jar /usr/local/lib/stilts.jar "$@"' > /usr/local/bin/stilts && chmod ugo+x /usr/local/bin/stilts
+    apt install -y bc && \
+    # autoremove and clean will get rid of not-needed libraries and reduce the container size (a bit)
+    apt autoremove -y && \
+    apt clean
 
 # work in this directory
 WORKDIR /tmp/build
@@ -258,10 +253,8 @@ WORKDIR /tmp/build
 # add files from the current directory in to the build directory (all the files for the Robbie library)
 ADD . /tmp/build
 
-# install python dependencies, with specific versions specified for longevity, and Robbie scripts
-# using pip install . will break the shebang lines of some scripts so stick with python setup.py install
-RUN pip install -r requirements.txt && \
-    python setup.py install && \
+# install python dependencies and the psrdb scripts
+RUN pip install . && \
     rm -rf /tmp/build
 
 # set the home directory to be /tmp so that we get fewer warnings from python libraries like matplotlib or astropy.
@@ -278,12 +271,12 @@ Note the following from the above:
 
 To build the above container we run the following:
 ~~~
-$ docker build -t robbie:new .
+$ docker build -t psrdb:new .
 ...
 ~~~
 {: .language-bash}
 
-Where we used `robbie` as the container name and `new` as the tag.
+Where we used `psrdb` as the container name and `new` as the tag.
 Typically people use either a version number (eg, v1.0) or `latest` as the tag, but any string will be accepted.
 
 If you have docker installed on your computer you can run the following exercise there.
@@ -299,77 +292,30 @@ If you don't have docker then you can run docker using [play with docker](https:
 {: .solution}
 
 
->## Let's build a container
-> Create a `Dockerfile` which will generate a container with this recipe:
-> - use python:3.8.5 as the base layer
-> - git clone [my repo](https://github.com/PaulHancock/symmetrical-octo-parakeet.git) from another workshop (we use https address to avoid ssh failures)
-> - install `mymodule` with pip
-> - set the default `WORKDIR` to be `/app`
->
-> > ## Solution
-> > ~~~
-> > # use a pre-made container as base
-> > FROM python:3.8.5
-> >
-> > # download the file into /user/bin and change permissions
-> > RUN cd /tmp &&\
-> >     git clone https://github.com/PaulHancock/symmetrical-octo-parakeet.git &&\
-> >     cd symmetrical-octo-parakeet && pip install .
-> >
-> > # set the default work directory
-> > WORKDIR /app
-> >
-> > ~~~
-> > {: .language-docker}
-> {: .solution}
-{: .challenge}
-
 > ## Build and run your container
-> Build like this:
+> Clone the rep o(you could include the clone command in the Dockerfile, but this is the standard way if it's software you have developed)
 > ~~~
-> $ docker build -t test:latest .
+> $ git clone https://github.com/OZGrav/psrdb.git
+> ~~~
+> {: .language-bash}
+> Build it
+> ~~~
+> $ docker build -t psrdb:new .
 > ~~~
 > {: .language-bash}
 > Run it like this:
 > ~~~
-> $ docker run test sky_sim.py
+> $ docker run psrdb:new psrdb -h
 > ~~~
 > {: .language-bash}
 {: .challenge}
 
-> ## Get the outputs from the container
-> The `sky_sim.py` script prints to STDOUT when run, but will also save the output to a file called `catalog.csv`
-> To access this file we need to bind our local directory to the working directory (`/app`) within the container.
->
-> Run `sky_sim.py` from within the `test` container using the appropriate binding and view the output file.
->
-> > ## Solution
-> > ~~~
-> > $ docker run --mount type=bind,source="$(pwd)",target=/app test sky_sim.py
-> > $ head output.txt
-> > ~~~
-> > {: .language-bash}
-> > ~~~
-> > id,ra,dec
-> > 0000000,    15.057292,    40.908259
-> > 0000001,    14.577034,    42.077796
-> > 0000002,    14.072312,    40.717162
-> > 0000003,    15.194828,    41.930678
-> > 0000004,    13.545137,    40.823356
-> > 0000005,    14.399253,    40.782598
-> > 0000006,    14.195131,    42.081639
-> > 0000007,    13.764496,    40.293573
-> > 0000008,    13.518799,    41.389172
-> > ~~~
-> > {: .output}
-> {: .solution}
-{: .challenge}
 
 Managing all the binding and container selection can be a bit annoying so you might want to create some shortcuts or aliases for yourself.
 If you are using a container within a bash script then you can set/use a variable to help you out:
 ~~~
 # setup the container run command once
-container='docker run --mount type=bind,source="$(pwd)",target=/app test'
+container='docker run --mount type=bind,source="$(pwd)",target=/app psrdb:new '
 
 # ... later on you can use it easily and without making the script hard to read
 ${container} sky_sim.py
@@ -378,7 +324,7 @@ ${container} sky_sim.py
 
 Or you might create a bash alias for general use on your command line:
 ~~~
-alias container='docker run --mount type=bind,source="$(pwd)",target=/app test'
+alias container='docker run --mount type=bind,source="$(pwd)",target=/app psrdb:new '
 ~~~
 {: .language-bash}
 
@@ -417,7 +363,7 @@ This means that you can create docker images on your local machine, test and dev
 > > -v $(pwd)/test:/output \
 > > --privileged -t --rm \
 > > singularityware/docker2singularity \
-> > test:latest
+> > psrdb:new
 > > ~~~
 > > {: .language-bash}
 > > This will pull a new image to your machine the first time you run it.
@@ -438,13 +384,13 @@ This means that you can create docker images on your local machine, test and dev
 > > (9/10) Building squashfs container...
 > > INFO:    Starting build...
 > > INFO:    Creating SIF file...
-> > INFO:    Build complete: /tmp/test_latest-2023-06-06-806deabcb504.simg
+> > INFO:    Build complete: /tmp/psrdb_new-2023-06-06-806deabcb504.simg
 > > (10/10) Moving the image to the output folder...
 > >     306,089,984 100%  368.07MB/s    0:00:00 (xfr#1, to-chk=0/1)
 > > Final Size: 292MB
 > > ~~~
 > > {: .output}
-> > Note the name of the image will be `test_latest-2023-06-06-806deabcb504.simg` which you can rename.
+> > Note the name of the image will be `psrdb_new-2023-06-06-806deabcb504.simg` which you can rename.
 > > ~~~
 > > sudo chown ${USER} -R test
 > > mv test/[long name].simg test.sif
@@ -472,7 +418,7 @@ Singularity supports binding files/directories within the container to locations
 
 Singularity offers multiple ways to interact with a container:
 - run - launch container an run a predefined script
-- exec - launch container with custom commands (eg `sky_sim.py` or `python my_other_script.py`)
+- exec - launch container with custom commands (eg `psrdb` or `python my_other_script.py`)
 - shell - drops you into an interactive shell within the container (similar to exec with `/usr/bin/bash` as args)
 
 > ## Run your singularity image
@@ -484,20 +430,47 @@ Singularity offers multiple ways to interact with a container:
 >
 > > ## Example on ozstar
 > > ~~~
-> > scp test.sif ozstar:/fred/oz983/phancock/.
-> > ssh ozstar
-> > module load apptainer/latest
-> > singularity exec -B $PWD:/home/phancock test.sif sky_sim.py
+> > scp psrdb_new.sif nt:/fred/oz005/users/nswainst/
+> > ssh nt
+> > module load apptainer
+> > singularity exec -B $PWD:/home/nswainst psrdb_new.sif psrdb -h
 > > ~~~
 > > {: .language-bash}
 > > ~~~
-> > Wrote catalog.csv
-> > ~~~
-> > {: .output}
-> > If we run `ls` then you should see the `catalog.csv` file in the local directory.
+> > WARNING: File mode (664) on /home/nswainst/.apptainer/remote.yaml needs to be 600, fixing that...
+> > 2024-05-06 15:51:24,265 - root - 46   - INFO      :: Console logger enabled
+> > usage: psrdb [-h] [-t TOKEN] [-u URL] [-q] [-v] {pulsar,telescope,main_project,project,ephemeris,template,calibration,observation,pipeline_run,pulsar_fold_result,pipeline_image,toa,residual} ...
+> >
+> > positional arguments:
+> >   {pulsar,telescope,main_project,project,ephemeris,template,calibration,observation,pipeline_run,pulsar_fold_result,pipeline_image,toa,residual}
+> >                         Database models which can be interrogated
+> >     pulsar              A pulsar source defined by a J2000 name
+> >     telescope           A telescope defined by a name
+> >     main_project        A MainProject defined by a code, short name, embargo period and a description
+> >     project             A project defined by a code, short name, embargo period and a description
+> >     ephemeris           A pulsar ephemeris
+> >     template            A pulsar template/standard
+> >     calibration         A defined by its type and location
+> >     observation         Observation details.
+> >     pipeline_run        PipelineRun details.
+> >     pulsar_fold_result  A pulsar pulsar_fold_result/standard
+> >     pipeline_image      A pipelineimage with type and rank informing the position of the image
+> >     toa                 A pulsar toa/standard
+> >     residual            A pulsar residual/standard
+> >
+> > optional arguments:
+> >   -h, --help            show this help message and exit
+> >   -t TOKEN, --token TOKEN
+> >                         JWT token
+> >   -u URL, --url URL     GraphQL URL
+> >   -q, --quiet           Return ID only
+> >   -v, --verbose         Increase verbosity
 > >
 > > ~~~
-> > singularity shell test.sif
+> > {: .output}
+> >
+> > ~~~
+> > singularity shell psrdb_new.sif
 > > ~~~
 > > {: .language-bash}
 > > Will give me an interactive terminal that looks like this:
